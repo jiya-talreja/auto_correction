@@ -45,56 +45,49 @@ def ocr_to_lines(data,con_thres=40):
         sentence=" ".join(line_dict[k])
         final_list.append(sentence)
     return final_list
-def extract_questions(lines):#list of lines in paper
-    use_words=["how","when","why","which","where","who","whom",
-        "what","define","explain","difference",
-        "distinguish","short notes"
-    ]
-    ignore_words=[
-        "note","notes","instruction","general instructions",
-        "compulsory","permitted","max time",
-        "attempt","question paper","section",
-        "sections","marks","mark","attempted","paper"]
-    current_q=""
-    questions=[]
-    in_main=False
+fixes = {
+    "11.": "ii.",
+    "Il.": "ii.",
+    "il.": "iii.",
+    "Ill.": "iii.",
+    "vil.": "vii.",
+    "Vill.": "viii.",
+    "vill.": "viii.",
+    "1s": "is"
+}
+def normalize(text):
+    for wrong, correct in fixes.items():
+        text = text.replace(wrong, correct)
+    return text
+def extract_questions(lines):
+    chunks = []
+    current = None
     for line in lines:
-        line=line.lower().strip()
+        line = normalize(line).strip()
         if not line:
             continue
-        if any(word in line for word in ignore_words):
-            label="noise"
-        elif(
-            re.match(r'^\(?\d+[\).\s]', line) or#1. 1)
-            re.match(r'^q[\.\s-]*\d+', line)#Q..
-        ):
-            label="main"
-        elif(
-            re.match(r'^[a-z]\)', line) or#a) a.
-            re.match(r'^\([ivx]+\)', line) or#roman
-            re.match(r'^\d+\.\d+', line)#1.1
-        ):
-            label="subq"
-        elif(
-            "?" in line or
-            any(word in line for word in use_words)
-        ):
-            label="con"
-        else:
-            label="con"
-        if label=="noise":
-            continue
-        elif label=="main":
-            if current_q:
-                questions.append(current_q.strip())
-            current_q=line
-            in_main=True
-        elif label=="subq":
-            if in_main:
-                current_q+=" "+line
-        elif label=="con":
-                if current_q:
-                    current_q+=" "+line
-    if current_q:
-            questions.append(current_q.strip())
-    return questions
+        if re.match(r'^(Q\.?\s*)?\d+\.', line, re.I) or re.match(r'^Q\.?\s*\d+', line, re.I):
+            if current:
+                content = current["content"]
+                roman = list(re.finditer(r'(?<=\s)(i|ii|iii|iv|v|vi|vii|viii|ix|x)\.', content, re.I))
+                if roman and "multiple choice" not in content.lower():
+                    for i, m in enumerate(roman):
+                        start = m.start()
+                        end = roman[i + 1].start() if i + 1 < len(roman) else len(content)
+                        chunks.append({
+                            "q_no": f'{current["q_no"]}.{m.group(1).lower()}',
+                            "content": content[start:end].strip()
+                        })
+                else:
+                    chunks.append(current)
+            q = re.search(r'Q\.?\s*(\d+)|^(\d+)\.', line, re.I)
+            num = q.group(1) if q.group(1) else q.group(2)
+            current = {
+                "q_no": f"Q{num}",
+                "content": line
+            }
+        elif current:
+            current["content"] += " " + line
+    if current:
+        chunks.append(current)
+    return chunks
