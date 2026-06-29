@@ -8,6 +8,7 @@ def parsor_json(text : str):
     response=client.chat.completions.create(
         model=model,
         temperature=0,
+        max_tokens=8000,
         messages=[
             {
                 "role":"system",
