@@ -3,13 +3,12 @@ from typing import List
 from services.input_handle import pdf
 from services.input_handle import img_in
 from services.input_handle import docs
+from services.parser_groq import parsor_json
 from typing_extensions import Annotated
 router=APIRouter()
-
 @router.post("/upload-teacher")
-async def upload_teacher(files:UploadFile=File(...)):
+async def upload_question_paper(files:UploadFile=File(...)):
     documents=[]
-   
     name=files.filename.lower()
     content=await files.read()
     if name.endswith(".pdf"):
@@ -20,6 +19,7 @@ async def upload_teacher(files:UploadFile=File(...)):
         result=img_in([content])
     else:
         return {"error":"Invalid file"}
+    groq_parser=parsor_json(result)
     documents.append({
         "filename":name,
         "contents":result
